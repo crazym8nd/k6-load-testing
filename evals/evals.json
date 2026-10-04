@@ -1,0 +1,77 @@
+{
+  "skill_name": "k6-load-testing",
+  "evals": [
+    {
+      "id": "baseline",
+      "prompt": "Померь производительность эндпоинта под нагрузкой (RPS, p95, ошибки).",
+      "expected_output": "Baseline-прогон: стенд с прод-конфигурацией, seed, k6, отчёт с RPS/p95/ошибками.",
+      "assertions": [
+        { "name": "прод-конфиг и объёмы", "description": "запросил CPU/RAM/heap/пул БД и объёмы таблиц (не дефолты)" },
+        { "name": "стенд в Docker", "description": "Docker с прод-лимитами, внешние интеграции отключены" },
+        { "name": "baseline прогон", "description": "k6 constant-arrival-rate, снял RPS/p95/ошибки" },
+        { "name": "отчёт", "description": "отчёт одной нитью: verdict → результаты → выводы → рекомендации" }
+      ]
+    },
+    {
+      "id": "find-ceiling",
+      "prompt": "Найди потолок («колено») производительности сервиса.",
+      "expected_output": "Stress-прогон (ступени) с найденным потолком.",
+      "assertions": [
+        { "name": "stress, а не baseline", "description": "ramping-arrival-rate, ступенчатый рост RPS" },
+        { "name": "ожидаемая нагрузка", "description": "запросил ожидаемый пик, чтобы задать шаг/рамки" },
+        { "name": "нашёл колено", "description": "точка, где RPS перестаёт расти, p95 взлетает" },
+        { "name": "dropped_iterations", "description": "сигнал колена: dropped_iterations > 0 + CPU 100%/пул max" }
+      ]
+    },
+    {
+      "id": "dropped-iterations-not-misread",
+      "prompt": "На RATE=500 получили 0% ошибок, но фактический RPS 387. Это нормально?",
+      "expected_output": "Определяет, что нагрузка не дошла (dropped_iterations), а не «сервер выдержал».",
+      "assertions": [
+        { "name": "проверил dropped_iterations", "description": "смотрит dropped_iterations, а не только http_req_failed" },
+        { "name": "распознал недолив", "description": "понимает: 0% ошибок при RPS<цели = k6 не влил нагрузку" },
+        { "name": "поднял MAX_VUS", "description": "предлагает поднять MAX_VUS и перегнать" }
+      ]
+    },
+    {
+      "id": "cold-start-not-regression",
+      "prompt": "После рестарта p95 вырос до 2с — это регресс?",
+      "expected_output": "Распознаёт cold-start, а не регресс; смотрит steady-state.",
+      "assertions": [
+        { "name": "распознал cold-start", "description": "первые 2-5 мин = JIT/кэши, не деградация" },
+        { "name": "не смешал с насыщением", "description": "отделяет cold-start от насыщения" },
+        { "name": "steady-state", "description": "оценивает p95 после прогрева, исключая холодное окно" }
+      ]
+    },
+    {
+      "id": "spike-survival",
+      "prompt": "Проверь, переживёт ли сервис внезапный всплеск трафика.",
+      "expected_output": "Spike-прогон: выживание + время восстановления.",
+      "assertions": [
+        { "name": "spike сценарий", "description": "baseline → мгновенный скачок → hold → сброс → проверка" },
+        { "name": "выживание", "description": "0% ошибок на пике" },
+        { "name": "восстановление", "description": "CPU/пул/p95 вернулись к baseline после сброса" }
+      ]
+    },
+    {
+      "id": "soak-handoff",
+      "prompt": "Проверь, нет ли утечек памяти со временем.",
+      "expected_output": "НЕ запускает soak сам; отдаёт пользователю команду soak-run.sh и анализирует артефакт после.",
+      "assertions": [
+        { "name": "не запускает soak", "description": "долгий тест — агент не гоняет сам" },
+        { "name": "отдаёт команду", "description": "готовит soak-run.sh, одна команда для пользователя" },
+        { "name": "артефакт для анализа", "description": "команда оставляет summary + soak-metrics.txt, агент анализирует после" }
+      ]
+    },
+    {
+      "id": "report-one-thread",
+      "prompt": "Сделай отчёт по результатам прогона.",
+      "expected_output": "Отчёт одной нитью (BLUF), без выноса инструментов анализа в секции.",
+      "assertions": [
+        { "name": "структура", "description": "Резюме → Что измеряли → Результаты → Выводы → Рекомендации → Бизнес" },
+        { "name": "severity", "description": "выводы с severity (High/Medium/Low)" },
+        { "name": "методология не секции", "description": "triage/паттерны/дерево вплетены в выводы, а не отдельными блоками" }
+      ]
+    }
+  ]
+}
